@@ -1246,7 +1246,7 @@ void PSDeleteLayerParamenters(PSLayerParameters * params) {
     free(params);
 }
 
-int feedforwardThroughTime(PSNeuralNetwork * network, double * values,
+static int feedforwardThroughTime(PSNeuralNetwork * network, double * values,
                            int times)
 {
     if (network == NULL) return 0;
@@ -1321,6 +1321,113 @@ int PSFeedforward(PSNeuralNetwork * network, double * values) {
     }
     return 1;
 }
+
+//PSPredict
+//by cgoxopx
+static void getNetworkOutput(PSNeuralNetwork * network,
+              double * output_data,
+              int data_size){
+  int netsize = network->size, outsize = network->output_size, i;
+  PSLayer * out = network->layers[netsize - 1];
+  for (i = 0; i < outsize; i++) {
+      double a = out->neurons[i]->activation;
+    if(i<data_size){
+      output_data[i]=a;
+    }else{
+      return;
+    }
+  }
+}
+static int predictRNN(PSNeuralNetwork * network,
+              double * input_data,
+              double * output_data,
+              int data_size,
+              int t,int maxlen){
+  if (network == NULL) return 0;
+  PSLayer * first = network->layers[0];
+  int input_size = first->size;
+  
+  PSLayer * output= network->layers[network->size-1];
+  char * func = "predictRNN";
+  int i;
+  for (i = 0; i < data_size; i++) {
+    
+    if(i>=input_size)break;
+    
+    PSNeuron * neuron = first->neurons[i];
+    neuron->activation = input_data[i];
+    PSAddRecurrentState(neuron, input_data[i], maxlen, t);
+    if (neuron->extra == NULL) {
+      PSErr(func, "Failed to allocate Recurrent Cell!");
+      return 0;
+    }
+  }
+  for (i = 1; i < network->size; i++) {
+    PSLayer * layer = network->layers[i];
+    if (layer == NULL) {
+      PSErr(func, "Layer %d is NULL", i);
+      return 0;
+    }
+    if (layer->feedforward == NULL) {
+      PSErr(func, "Layer %d feedforward function is NULL", i);
+      return 0;
+    }
+    int ok = layer->feedforward(network, layer, maxlen, t);
+    if (!ok) return 0;
+  }
+  getNetworkOutput(network,output_data,data_size);
+  return 1;
+}
+static int predictNormalNetwork(PSNeuralNetwork * network,
+              double * input_data,
+              double * output_data,
+              int data_size){
+  char * func = "predictNormalNetwork";
+  PSLayer * first = network->layers[0];
+  int input_size = first->size;
+  int i;
+  for (i = 0; i < data_size; i++) {
+    
+    if(i>=input_size)break;
+    
+    first->neurons[i]->activation = input_data[i];
+#ifdef USE_AVX
+    first->avx_activation_cache[i] = input_data[i];
+#endif
+  }
+  for (i = 1; i < network->size; i++) {
+    PSLayer * layer = network->layers[i];
+    if (layer == NULL) {
+      PSErr(func, "Layer %d is NULL!", i);
+      return 0;
+    }
+    if (layer->feedforward == NULL) {
+      PSErr(func, "Layer %d feedforward function is NULL", i);
+      return 0;
+    }
+    int success = layer->feedforward(network, layer);
+    if (!success) return 0;
+  }
+  getNetworkOutput(network,output_data,data_size);
+  return 1;
+}
+int PSPredict(PSNeuralNetwork * network,
+              double * input_data,
+              double * output_data,
+              int data_size,
+              int tm,int maxlen){
+  char * func = "PSPredict";
+  if (network->size == 0) {
+    PSErr(func, "Empty network!");
+    return 0;
+  }
+  if(network->flags & FLAG_RECURRENT) {
+    return predictRNN(network,input_data,output_data,data_size,tm,maxlen);
+  }else{
+    return predictNormalNetwork(network,input_data,output_data,data_size);
+  }
+}
+//PSPredict end
 
 PSGradient * createLayerGradients(PSLayer * layer) {
     if (layer == NULL) return NULL;
@@ -1564,7 +1671,7 @@ PSGradient ** backprop(PSNeuralNetwork * network, double * x, double * y) {
     return gradients;
 }
 
-PSGradient ** backpropThroughTime(PSNeuralNetwork * network, double * x,
+static PSGradient ** backpropThroughTime(PSNeuralNetwork * network, double * x,
                                   double * y, int times)
 {
     if (network == NULL) return NULL;
@@ -1726,7 +1833,7 @@ PSGradient ** backpropThroughTime(PSNeuralNetwork * network, double * x,
     return gradients;
 }
 
-double updateWeights(PSNeuralNetwork * network, double * training_data,
+static double updateWeights(PSNeuralNetwork * network, double * training_data,
                      int batch_size, int elements_count,
                      PSTrainingOptions* opts, double rate, ...)
 {
@@ -1958,7 +2065,7 @@ double gradientDescent(PSNeuralNetwork * network,
     return err / (double) batches_count;
 }
 
-float validate(PSNeuralNetwork * network, double * test_data, int data_size,
+static float validate(PSNeuralNetwork * network, double * test_data, int data_size,
                int log) {
     int i, j;
     float accuracy = 0.0f;

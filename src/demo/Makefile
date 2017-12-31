@@ -11,7 +11,7 @@ ifeq ($(AVX),on)
         OBJS+=../avx.o
 endif
 
-default: all
+default: 
 
 mnist_demo: $(OBJS) mnist_demo.o
 	$(CC) -o ../../bin/mnist_demo $(OBJS) mnist_demo.o $(LDFLAGS)

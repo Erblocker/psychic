@@ -163,7 +163,15 @@ void PSTrain(PSNeuralNetwork * network,
              PSTrainingOptions * options,
              double * test_data,
              int test_size);
+
+
 float PSTest(PSNeuralNetwork * network, double * test_data, int data_size);
+int PSPredict(PSNeuralNetwork * network,
+              double * input_data,
+              double * output_data,
+              int data_size,
+              int tm,int maxlen);
+
 int PSVerifyNetwork(PSNeuralNetwork * network);
 //int arrayMaxIndex(double * array, int len);
 char * PSGetLabelForType(PSLayerType type);

@@ -1347,7 +1347,6 @@ static int predictRNN(PSNeuralNetwork * network,
   PSLayer * first = network->layers[0];
   int input_size = first->size;
   
-  PSLayer * output= network->layers[network->size-1];
   char * func = "predictRNN";
   int i;
   for (i = 0; i < data_size; i++) {
@@ -1496,7 +1495,7 @@ int PSClassify(PSNeuralNetwork * network, double * values) {
     return max_idx;
 }
 
-PSGradient ** createGradients(PSNeuralNetwork * network) {
+static PSGradient ** createGradients(PSNeuralNetwork * network) {
     if (network == NULL) return NULL;
     PSGradient ** gradients = malloc(sizeof(PSGradient*) * network->size - 1);
     if (gradients == NULL) {

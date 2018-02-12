@@ -17,76 +17,76 @@
  
 #define _gradient(z) 1.0f
 
-inline float sigmoid(float z){
+inline double sigmoid(double z){
   return 1.0f / (1.0f + exp(-z));
 }
 
-inline float sigmoid_gradient(float a){
+inline double sigmoid_gradient(double a){
   return a * (1.0f - a);
 }
 
-inline float relu(float z){
+inline double relu(double z){
   return z > 0? z : 0;
 }
 
-inline float relu_gradient(float a){
+inline double relu_gradient(double a){
   return a > 0? 1 : 0;
 }
 
 //tanh is predefined
-inline float tanh_gradient(float a){
+inline double tanh_gradient(double a){
   return 1.0f - a * a;
 }
 
-inline float softrelu(float z){
+inline double softrelu(double z){
   return log(1.0f + exp(z));
 }
 
-inline float softrelu_gradient(float a){
+inline double softrelu_gradient(double a){
   return 1.0f - exp(-a);
 }
 
-inline float leakyrelu(float z){
+inline double leakyrelu(double z){
   return z > 0? z : 0.25f * z;
 }
 
-inline float leakyrelu_gradient(float a){
+inline double leakyrelu_gradient(double a){
   return a > 0? 1 : 0.25f;
 }
 
-inline float linear_regression(float y, float label){
-  float delta = y - label;
+inline double linear_regression(double y, double label){
+  double delta = y - label;
   return delta * delta;
 }
 
-inline float linear_regression_gradient(float y, float label){
+inline double linear_regression_gradient(double y, double label){
   return y - label;
 }
 
 //softmax is calculated by pow(z) / sum of pow
-inline float negative_log_likelihood_gradient(float a, bool i_equal_j){
+inline double negative_log_likelihood_gradient(double a, bool i_equal_j){
   return i_equal_j? a - 1.0f : a;
 }
 
 
 kernel void LSTMCellffd(
-  global float * candidate,
-  global float * input_gate,
-  global float * output_gate,
-  global float * forget_gate,
-  const global float * cell_candidate_weights,
-  const global float * cell_input_weights,
-  const global float * cell_output_weights,
-  const global float * cell_forget_weights,
-  const global float * pre
+  global double * candidate,
+  global double * input_gate,
+  global double * output_gate,
+  global double * forget_gate,
+  const global double * cell_candidate_weights,
+  const global double * cell_input_weights,
+  const global double * cell_output_weights,
+  const global double * cell_forget_weights,
+  const global double * pre
   ){
     int i=get_global_id(1);
     int j=get_global_id(0);
-    float a = pre[0];
+    double a = pre[j];
     
-    candidate[j]   += (a * cell_candidate_weights[i]);
-    input_gate[j]  += (a * cell_input_weights[i]);
-    output_gate[j] += (a * cell_output_weights[i]);
-    forget_gate[j] += (a * cell_forget_weights[i]);
+    atomic_add(&candidate[j]);   //candidate[j]   += (a * cell_candidate_weights[i]);
+    atomic_add(&input_gate[j]);  //input_gate[j]  += (a * cell_input_weights[i]);
+    atomic_add(&output_gate[j]); //output_gate[j] += (a * cell_output_weights[i]);
+    atomic_add(&forget_gate[j]); //forget_gate[j] += (a * cell_forget_weights[i]);
     
 }

@@ -34,6 +34,12 @@ ifeq ($(AVX),on)
         OBJS+=avx.o
 endif
 
+ifeq ($(CL),on)
+	CFLAGS+=-DUSE_CL
+        OBJS+=cl.o
+        LDFLAGS+= -lCL
+endif
+
 BIN_CFLAGS = $(CFLAGS)
 BIN_LDFLAGS = $(LDFLAGS)
 CLI_OBJS=$(OBJS) psycl.o

@@ -26,6 +26,10 @@
 #include "avx.h"
 #endif
 
+#ifdef USE_CL
+#include "cl.h"
+#endif
+
 #include "lstm.h"
 #include "utils.h"
 
@@ -44,7 +48,11 @@
 
 static int LSTMCellFeedforward(PSLayer * layer, PSLayer * previous,
                                PSNeuron * neuron, int onehot_idx,
-                               int times, int t)
+                               int times, int t
+#ifdef USE_CL
+                               ,int neuron_index
+#endif
+                               )
 {
     PSLSTMCell * cell = GetLSTMCell(neuron);
     if (cell == NULL) {
@@ -68,6 +76,14 @@ static int LSTMCellFeedforward(PSLayer * layer, PSLayer * previous,
         output_gate = cell->output_weights[onehot_idx];
         forget_gate = cell->forget_weights[onehot_idx];
     } else {
+#ifdef USE_CL
+      if(PSCLUseable()){
+        candidate   = layer->cl_cache[0][neuron_index];
+        input_gate  = layer->cl_cache[0][neuron_index];
+        output_gate = layer->cl_cache[0][neuron_index];
+        forget_gate = layer->cl_cache[0][neuron_index];
+      }else{
+#endif
         int i = 0;
 #ifdef USE_AVX
         int j = 0, o = 0, f = 0;
@@ -89,6 +105,9 @@ static int LSTMCellFeedforward(PSLayer * layer, PSLayer * previous,
             output_gate += (a * cell->output_weights[i]);
             forget_gate += (a * cell->forget_weights[i]);
         }
+#ifdef USE_CL
+      }
+#endif
     }
     
     if (t > 0) {
@@ -328,10 +347,80 @@ int PSLSTMFeedforward(void * _net, void * _layer, ...) {
         }
     }
     int i = 0;
-    for (; i < size; i++) {
+#ifdef USE_CL
+    if(PSCLUseable()){
+      //Psychic.
+      //Written by cgoxopx
+      if (vector_idx < 0) {
+        PSCLKernel * kn=PSCLCreateKernel(NULL,"LSTMCellffd");
+
+        //create Mem
+        PSCLMem * m_candidate              =PSCLMemAdd(kn,layer->cl_cache[0]      ,size                    ,PSCLMemRDWR);
+        PSCLMem * m_input_gate             =PSCLMemAdd(kn,layer->cl_cache[1]      ,size                    ,PSCLMemRDWR);
+        PSCLMem * m_output_gate            =PSCLMemAdd(kn,layer->cl_cache[2]      ,size                    ,PSCLMemRDWR);
+        PSCLMem * m_forget_gate            =PSCLMemAdd(kn,layer->cl_cache[3]      ,size                    ,PSCLMemRDWR);
+        
+        PSCLMem * m_cell_candidate_weights =PSCLMemAdd(kn,previous->cl_cache[0]   ,previous->size          ,PSCLMemRDWR);
+        PSCLMem * m_cell_input_weights     =PSCLMemAdd(kn,previous->cl_cache[1]   ,previous->size          ,PSCLMemRDWR);
+        PSCLMem * m_cell_output_weights    =PSCLMemAdd(kn,previous->cl_cache[2]   ,previous->size          ,PSCLMemRDWR);
+        PSCLMem * m_cell_forget_weights    =PSCLMemAdd(kn,previous->cl_cache[3]   ,previous->size          ,PSCLMemRDWR);
+        
+        PSCLMem * m_state                  =PSCLMemAdd(kn,previous->cl_cache[4]   ,previous->size          ,PSCLMemRDWR);
+        
+        for (i=0; i < size; i++) {
+          layer->cl_cache[0][i]=0;
+          layer->cl_cache[1][i]=0;
+          layer->cl_cache[2][i]=0;
+          layer->cl_cache[3][i]=0;
+        }
+        PSCLUpdateUpload(m_candidate);
+        PSCLUpdateUpload(m_input_gate);
+        PSCLUpdateUpload(m_output_gate);
+        PSCLUpdateUpload(m_forget_gate);
+        
+        for (i=0; i < previous->size; i++) {
+          previous->cl_cache[0][i]=(GetLSTMCell(layer->neurons[i]))->candidate_weights[vector_idx];
+          previous->cl_cache[1][i]=(GetLSTMCell(layer->neurons[i]))->input_weights    [vector_idx];
+          previous->cl_cache[2][i]=(GetLSTMCell(layer->neurons[i]))->output_weights   [vector_idx];
+          previous->cl_cache[3][i]=(GetLSTMCell(layer->neurons[i]))->forget_weights   [vector_idx];
+          previous->cl_cache[4][i]=previous->neurons[i]->activation;
+        }
+        PSCLUpdateUpload(m_state);
+        PSCLUpdateUpload(m_cell_candidate_weights);
+        PSCLUpdateUpload(m_cell_input_weights);
+        PSCLUpdateUpload(m_cell_output_weights);
+        PSCLUpdateUpload(m_cell_forget_weights);
+        
+        //end
+
+        //run
+        size_t GBt[2];
+        GBt[1]=size;
+        GBt[0]=previous->size;
+        PSCLKernelSetDim(kn,2);
+        PSCLKernelSetLCTAuto(kn);
+        PSCLKernelExec(kn);
+        //end
+
+        //get data
+        PSCLUpdateRead(m_candidate);
+        PSCLUpdateRead(m_input_gate);
+        PSCLUpdateRead(m_output_gate);
+        PSCLUpdateRead(m_forget_gate);
+        //end
+
+        PSCLDestroyKernel(kn);
+      }
+    }
+#endif
+    for (i=0; i < size; i++) {
         PSNeuron * neuron = layer->neurons[i];
         int ok = LSTMCellFeedforward(layer, previous, neuron,
-                                     vector_idx, times, t);
+                                     vector_idx, times, t
+#ifdef USE_CL
+                                     ,i
+#endif
+                                     );
         if (!ok) {
             //TODO: handle
             return 0;

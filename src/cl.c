@@ -19,13 +19,20 @@
 #include <memory.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/file.h>
+#include <sys/types.h>
 
 static struct{
   PSCLContext * context;
   PSCLProgram * program;
-}PSCLSys={NULL,NULL};
+  int           failed;
+  char        * src;
+}PSCLSys={NULL,NULL,0,NULL};
 
 int PSCLUseable(){
+  if(PSCLSys.failed)return 0;
   if(PSCLSys.context==NULL)return 0;
   if(PSCLSys.program==NULL)return 0;
   return 1;
@@ -35,15 +42,30 @@ void PSCLInit(){
   if(PSCLSys.context!=NULL)return;
   if(PSCLSys.program!=NULL)return;
   PSCLSys.context=PSCLCreate();
-  char * src;
   
   //read src
-  
+    const char path[]="psychic.cl";
+    unsigned long filesize=-1;
+    struct stat statbuff;
+    if(stat(path,&statbuff)<0){
+      PSCLSys.failed=1;
+      return;
+    }else{
+      filesize=statbuff.st_size;
+      PSCLSys.src=(char*)malloc(filesize);
+      int fd=open(path,O_RDONLY);
+      if(fd==-1){
+        PSCLSys.failed=1;
+        return;
+      }
+      read(fd,PSCLSys.src,filesize);
+      close(fd);
+    }
   //end
   
   PSCLSys.program=PSCLCreateProgram(
     PSCLSys.context,
-    src
+    PSCLSys.src
   );
 }
 void PSCLDestroy(){
@@ -205,7 +227,7 @@ void PSCLDestroyKernel(PSCLKernel * kn){
 PSCLMem * PSCLMemAdd(PSCLKernel * kn,void * arg,size_t size,PSCLMemMethod method){
   PSCLMem * m;
   cl_mem_flags flags;
-  cl_uint ret;
+  cl_int ret;
   
   m=(PSCLMem*)malloc(sizeof(PSCLMem));
   if(m==NULL)return NULL;
@@ -230,6 +252,7 @@ PSCLMem * PSCLMemAdd(PSCLKernel * kn,void * arg,size_t size,PSCLMemMethod method
     kn->program->context->context,
     flags,size,NULL,&ret
   );
+  
   if(m->rem==NULL){
     free(m);
     return NULL;
@@ -294,22 +317,22 @@ void PSCLKernelSetDim(PSCLKernel * kn,size_t sz){
   kn->localThreads =(size_t*)malloc(sizeof(size_t)*sz);
 }
 
-void PSCLKernelSetGbThread(PSCLKernel * kn,size_t * arr){
-  int i;
+void PSCLKernelSetGbThread(PSCLKernel * kn,const size_t * arr){
+  cl_uint i;
   for(i=0;i<kn->dim;i++){
     kn->globalThreads[i]=arr[i];
   }
 }
 
-void PSCLKernelSetLCThread(PSCLKernel * kn,size_t * arr){
-  int i;
+void PSCLKernelSetLCThread(PSCLKernel * kn,const size_t * arr){
+  cl_uint i;
   for(i=0;i<kn->dim;i++){
     kn->localThreads[i]=arr[i];
   }
 }
 
 void PSCLKernelSetLCTAuto(PSCLKernel * kn){
-  int i,tmp;
+  cl_uint i,tmp;
   for(i=0;i<kn->dim;i++){
     tmp=kn->globalThreads[i];
     

@@ -108,6 +108,9 @@ typedef struct {
 #ifdef USE_AVX
     double * avx_activation_cache;
 #endif
+#ifdef USE_CL
+    double * cl_cache[6];
+#endif
     void * network;
 } PSLayer;
 

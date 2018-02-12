@@ -986,6 +986,12 @@ PSLayer * PSAddLayer(PSNeuralNetwork * network, PSLayerType type, int size,
 #ifdef USE_AVX
     layer->avx_activation_cache = NULL;
 #endif
+    int j;
+#ifdef USE_CL
+    for(j=0;j<6;j++)
+      layer->cl_cache[j] = NULL;
+#endif
+
     PSLayer * previous = NULL;
     int previous_size = 0;
     int initialized = 0;
@@ -1046,6 +1052,16 @@ PSLayer * PSAddLayer(PSNeuralNetwork * network, PSLayerType type, int size,
             PSAbortLayer(network, layer);
             return NULL;
         }
+#ifdef USE_CL
+    for(j=0;j<6;j++){
+        layer->cl_cache[j] = calloc(size, sizeof(double));
+        if (layer->cl_cache[j] == NULL) {
+            printMemoryErrorMsg();
+            PSAbortLayer(network, layer);
+            return NULL;
+        }
+    }
+#endif
 #ifdef USE_AVX
         layer->avx_activation_cache = calloc(size, sizeof(double));
         if (layer->avx_activation_cache == NULL) {
@@ -1054,7 +1070,7 @@ PSLayer * PSAddLayer(PSNeuralNetwork * network, PSLayerType type, int size,
             return NULL;
         }
 #endif
-        int i, j;
+        int i;
         for (i = 0; i < size; i++) {
             PSNeuron * neuron = malloc(sizeof(PSNeuron));
             if (neuron == NULL) {
@@ -1166,6 +1182,13 @@ void PSDeleteLayer(PSLayer* layer) {
     }
 #ifdef USE_AVX
     if (layer->avx_activation_cache != NULL) free(layer->avx_activation_cache);
+#endif
+#ifdef USE_CL
+    int j;
+    for(j=0;j<6;j++){
+      if (layer->cl_cache[j] != NULL)
+        free(layer->cl_cache[j]);
+    }
 #endif
     if (layer->delta != NULL) free(layer->delta);
     free(layer);

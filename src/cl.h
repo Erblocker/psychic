@@ -68,8 +68,8 @@
   void PSCLUpdateUpload(PSCLMem*);
   
   void PSCLKernelSetDim(PSCLKernel*,size_t);
-  void PSCLKernelSetGbThread(PSCLKernel*,size_t*);
-  void PSCLKernelSetLCThread(PSCLKernel*,size_t*);
+  void PSCLKernelSetGbThread(PSCLKernel*,const size_t*);
+  void PSCLKernelSetLCThread(PSCLKernel*,const size_t*);
   void PSCLKernelSetLCTAuto(PSCLKernel*);
   
   cl_uint PSCLKernelExec(PSCLKernel*);

@@ -37,7 +37,7 @@ endif
 ifeq ($(CL),on)
 	CFLAGS+=-DUSE_CL
         OBJS+=cl.o
-        LDFLAGS+= -lCL
+        LDFLAGS+= -lOpenCL
 endif
 
 BIN_CFLAGS = $(CFLAGS)
